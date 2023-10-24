@@ -9,23 +9,23 @@
     <h4>匹配选项</h4>
     <el-form-item>
       <template #label>
-        <el-text>拦截模式</el-text>
+        <el-text>拦截范围</el-text>
         <el-tooltip raw-content
                     content="">
           <template #content>
-            仅回复：只检查回复内容，命中时回复将替换为<el-tag size="small" type="info" disable-transitions>拦截_拦截提示_仅回复模式</el-tag>的内容。<br />
-            仅命令：只会对收到的以 <strong>指令前缀</strong> 开头的消息进行检查，命中时拒绝回复，<el-tag size="small" type="info" disable-transitions>拦截_拦截提示_仅命令模式</el-tag>不为空时会发送拦截提示。<br />
-            全部：会对所有收到的消息进行检查，命中时拒绝回复，<el-tag size="small" type="info" disable-transitions>拦截_拦截提示_全部模式</el-tag>不为空时会发送拦截提示。
+            发出的消息：拦截骰子发出的内容，进行检查。未通过检查，替换为<el-tag size="small" type="info" disable-transitions>拦截_完全拦截_发出的消息</el-tag>的内容。<br />
+            收到的指令：拦截骰子收到的命令文本进行检查，如收到「.rd 进行一次骰点」时，会检查其中的「进行一次骰点」，未通过检查则发送<el-tag size="small" type="info" disable-transitions>拦截_完全拦截_收到的指令</el-tag>的内容<br />
+            收到的所有消息：会对所有收到的消息(所有群内聊天)进行检查，未通过检查默认不做响应，如<el-tag size="small" type="info" disable-transitions>拦截_完全拦截_收到的所有消息</el-tag>不为空时会发送拦截提示。
           </template>
           <el-icon>
             <question-filled/>
           </el-icon>
         </el-tooltip>
       </template>
-      <el-radio-group v-model="config.mode">
-        <el-radio-button :label="Mode.OnlyReply">{{ "仅回复" }}</el-radio-button>
-        <el-radio-button :label="Mode.OnlyCommand">{{ "仅命令" }}</el-radio-button>
-        <el-radio-button :label="Mode.All">{{ "全部" }}</el-radio-button>
+      <el-radio-group v-model="config.mode" size="small">
+        <el-radio-button :label="Mode.ReplyOutput">{{ "发出的消息" }}</el-radio-button>
+        <el-radio-button :label="Mode.CommandInput">{{ "收到的指令" }}</el-radio-button>
+        <el-radio-button :label="Mode.AllInput">{{ "收到的所有消息(慎用)" }}</el-radio-button>
       </el-radio-group>
     </el-form-item>
     <el-form-item label="大小写敏感">
@@ -58,7 +58,14 @@
   </el-form>
   <div>
     <h4 style="display: inline;">响应设置</h4>
-    <el-text style="display: block; margin: 1rem 0;" type="warning" size="small">注：超过阈值时，对应用户该等级的计数会被清空重新计算。</el-text>
+    <el-text style="display: block; margin: 1rem 0;" type="warning" size="small"></el-text>
+    <el-text style="display: block; margin: 1rem 0;" type="warning" size="small">
+      <span>提示：</span>
+      <ul>
+        <li><p>超过阈值时，对应用户该等级的计数会被清空重新计算。</p></li>
+        <li><p>增加怒气值时，会计算群组和邀请人的连带责任。连带责任比例在 <strong>综合设置 > 黑白名单 > 设置选项</strong> 中调整。</p></li>
+      </ul>
+    </el-text>
   </div>
   <el-form >
     <el-form-item>
@@ -74,7 +81,7 @@
       <el-space direction="vertical" alignment="normal">
         <div>
           <el-checkbox-group v-model="config.levelConfig.notice.handlers">
-            <el-checkbox v-for="handle in defaultHandles" :label="handle.key">
+            <el-checkbox v-for="handle in defaultHandles" :key="handle.key" :label="handle.key">
               {{ handle.name }}
             </el-checkbox>
           </el-checkbox-group>
@@ -97,7 +104,7 @@
       <el-space direction="vertical" alignment="normal">
         <div>
           <el-checkbox-group v-model="config.levelConfig.caution.handlers">
-            <el-checkbox v-for="handle in defaultHandles" :label="handle.key">
+            <el-checkbox v-for="handle in defaultHandles" :key="handle.key" :label="handle.key">
               {{ handle.name }}
             </el-checkbox>
           </el-checkbox-group>
@@ -120,7 +127,7 @@
       <el-space direction="vertical" alignment="normal">
         <div>
           <el-checkbox-group v-model="config.levelConfig.warning.handlers">
-            <el-checkbox v-for="handle in defaultHandles" :label="handle.key">
+            <el-checkbox v-for="handle in defaultHandles" :key="handle.key" :label="handle.key">
               {{ handle.name }}
             </el-checkbox>
           </el-checkbox-group>
@@ -143,7 +150,7 @@
       <el-space direction="vertical" alignment="normal">
         <div>
           <el-checkbox-group v-model="config.levelConfig.danger.handlers">
-            <el-checkbox v-for="handle in defaultHandles" :label="handle.key">
+            <el-checkbox v-for="handle in defaultHandles" :key="handle.key" :label="handle.key">
               {{ handle.name }}
             </el-checkbox>
           </el-checkbox-group>
@@ -179,9 +186,9 @@ onBeforeUnmount(() => {
 const censorStore = useCensorStore()
 
 const enum Mode {
-  OnlyReply = 0,
-  OnlyCommand = 1,
-  All = 2,
+  ReplyOutput = 0,
+  CommandInput = 1,
+  AllInput = 2,
 }
 
 interface Config {
@@ -193,7 +200,7 @@ interface Config {
 }
 
 const config = ref<Config>({
-  mode: Mode.All,
+  mode: Mode.AllInput,
   caseSensitive: false,
   matchPinyin: false,
   filterRegex: "",

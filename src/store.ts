@@ -20,6 +20,7 @@ export interface AdapterQQ {
   loginState: goCqHttpStateCode
   inPackGoCqHttpLastRestricted: number
   inPackGoCqHttpProtocol: number
+  inPackGoCqHttpAppVersion: string,
   implementation: string
   useInPackGoCqhttp: boolean;
   goCqHttpLoginVerifyCode: string;
@@ -28,6 +29,9 @@ export interface AdapterQQ {
   goCqHttpSmsNumberTip: string;
   useSignServer: boolean;
   signServerConfig: any;
+  redVersion: string;
+  host: string;
+  port: number;
 }
 
 interface TalkLogItem {
@@ -64,8 +68,10 @@ interface DiceServer {
         origin: (string[])[],
         vars: string[],
         modified: boolean,
+        notBuiltin: boolean,
         topOrder: number,
         subType: string,
+        extraText: string,
       }
     }
   }
@@ -160,6 +166,11 @@ export const useStore = defineStore('main', {
       return info
     },
 
+    async getSupportedQQVersions() {
+      const info: {result: true, versions: string[]} | {result: false} = await backend.get(urlPrefix + '/im_connections/qq/get_versions')
+      return info
+    },
+
     async gocqhttpReloginImConnection(i: DiceConnection) {
       const info = await backend.post(urlPrefix + '/im_connections/gocqhttpRelogin', { id: i.id }, { timeout: 65000 })
       return info as any as DiceConnection
@@ -175,14 +186,14 @@ export const useStore = defineStore('main', {
       return info as any
     },
 
-    async addImConnection(form: { accountType: number, account: string, password: string, protocol: number, token: string, proxyURL: string, url: string, clientID: string, implementation: string, connectUrl: string, accessToken: string, relWorkDir: string, useSignServer: boolean, signServerConfig: any }) {
-      const { accountType, account, password, protocol, token, proxyURL, url, clientID, implementation, relWorkDir, connectUrl, accessToken, useSignServer, signServerConfig } = form
+    async addImConnection(form: { accountType: number, account: string, password: string, protocol: number, appVersion: string, token: string, proxyURL: string, url: string, host: string, port: number, clientID: string, implementation: string, connectUrl: string, accessToken: string, relWorkDir: string, useSignServer: boolean, signServerConfig: any }) {
+      const { accountType, account, password, protocol, appVersion, token, proxyURL, url, host, port, clientID, implementation, relWorkDir, connectUrl, accessToken, useSignServer, signServerConfig } = form
       let info = null
       switch (accountType) {
         //QQ
         case 0:
           if (implementation === 'gocq') {
-            info = await backend.post(urlPrefix + '/im_connections/add', { account, password, protocol, useSignServer, signServerConfig }, { timeout: 65000 })
+            info = await backend.post(urlPrefix + '/im_connections/add', { account, password, protocol, appVersion, useSignServer, signServerConfig }, { timeout: 65000 })
           } else if (implementation === 'walle-q') {
             info = await backend.post(urlPrefix + '/im_connections/addWalleQ', { account, password, protocol }, { timeout: 65000 })
           }
@@ -194,15 +205,20 @@ export const useStore = defineStore('main', {
           info = await backend.post(urlPrefix + '/im_connections/addKook', { token }, { timeout: 65000 })
           break
         case 3:
-          info = await backend.post(urlPrefix + '/im_connections/addTelegram', { token }, { timeout: 65000 })
+          info = await backend.post(urlPrefix + '/im_connections/addTelegram', { token, proxyURL }, { timeout: 65000 })
           break
         case 4:
           info = await backend.post(urlPrefix + '/im_connections/addMinecraft', { url }, { timeout: 65000 })
           break
         case 5:
           info = await backend.post(urlPrefix + '/im_connections/addDodo', { clientID, token }, { timeout: 65000 })
+          break
         case 6:
           info = await backend.post(urlPrefix + '/im_connections/addGocqSeparate', { relWorkDir, connectUrl, accessToken, account }, { timeout: 65000 })
+          break
+        case 7:
+          info = await backend.post(urlPrefix + '/im_connections/addRed', { host, port, token }, { timeout: 65000 })
+          break
       }
       return info as any as DiceConnection
     },
@@ -227,8 +243,8 @@ export const useStore = defineStore('main', {
       return info as any as DiceConnection
     },
 
-    async getImConnectionsSetData(i: DiceConnection, { protocol, ignoreFriendRequest, useSignServer, signServerConfig }: { protocol: number, ignoreFriendRequest: boolean, useSignServer?: boolean, signServerConfig?: any }) {
-      const info = await backend.post(urlPrefix + '/im_connections/set_data', { id: i.id, protocol, ignoreFriendRequest, useSignServer, signServerConfig })
+    async getImConnectionsSetData(i: DiceConnection, { protocol, appVersion, ignoreFriendRequest, useSignServer, signServerConfig }: { protocol: number, appVersion: string, ignoreFriendRequest: boolean, useSignServer?: boolean, signServerConfig?: any }) {
+      const info = await backend.post(urlPrefix + '/im_connections/set_data', { id: i.id, protocol, appVersion, ignoreFriendRequest, useSignServer, signServerConfig })
       return info as any as DiceConnection
     },
 
@@ -245,6 +261,14 @@ export const useStore = defineStore('main', {
     async diceConfigSet(data: any) {
       await backend.post(urlPrefix + '/dice/config/set', data)
       await this.diceConfigGet()
+    },
+
+    async diceMailTest() {
+      const res: { result: true } | {
+        result: false,
+        err: string
+      } = await backend.post(urlPrefix + '/dice/config/mail_test')
+      return res
     },
 
     async diceExec(text: string) {
@@ -332,6 +356,14 @@ export const useStore = defineStore('main', {
       return info as any
     },
 
+    async backupBatchDelete(names: string[]) {
+      const info: { result: true } | {
+        result: false,
+        fails: string[],
+      } = await backend.post(urlPrefix + '/backup/batch_delete', { names }, { headers: { token: this.token } })
+      return info
+    },
+
     // ban list相关
     async banConfigGet() {
       const info = await backend.get(urlPrefix + '/banconfig/get')
@@ -361,6 +393,13 @@ export const useStore = defineStore('main', {
         reasons: reason ? [reason] : []
       })
       return info as any
+    },
+
+    async banUpload({form}: { form: FormData }) : Promise<{ result: true } | {
+      result: false,
+      err: string
+    }>{
+      return await backend.post(urlPrefix + '/banconfig/import', form, {headers: {token: this.token, "Content-Type": "multipart/form-data"}})
     },
 
     // 群组列表
@@ -405,6 +444,24 @@ export const useStore = defineStore('main', {
       return info as any
     },
 
+    async deckCheckUpdate({ index }: any) {
+      const info: { result: false, err: string } | {
+        result: true,
+        old: string,
+        new: string,
+        format: 'json' | 'yaml' | 'toml',
+        tempFileName: string,
+      } = await backend.post(urlPrefix + '/deck/check_update', { index })
+      return info
+    },
+
+    async deckUpdate({ index, tempFileName }: any) {
+      const res: {result: false, err: string} | {
+        result: true,
+      } = await backend.post(urlPrefix + '/deck/update', { index, tempFileName})
+      return res
+    },
+
     async jsStatus(): Promise<boolean> {
       const resp = await apiFetch(urlPrefix + '/js/status', { method: 'GET' })
       return resp.status
@@ -415,6 +472,22 @@ export const useStore = defineStore('main', {
           token: this.token
         }
       })
+    },
+    async jsGetConfig() {
+      return await apiFetch(urlPrefix + '/js/get_configs', {
+        method: 'GET', headers: {
+            token: this.token
+        }
+      })
+    },
+    async jsSetConfig(configs: any) {
+        return await backend.post(urlPrefix + '/js/set_configs',  configs)
+    },
+    async jsResetConfig(pluginName: any, key: any) {
+        return await backend.post(urlPrefix + '/js/reset_config', {pluginName, key})
+    },
+    async jsDeleteUnusedConfig(pluginName: any, key: any) {
+      return await backend.post(urlPrefix + '/js/delete_unused_config', {pluginName, key})
     },
     async jsGetRecord() {
       return await apiFetch(urlPrefix + '/js/get_record', {
@@ -469,6 +542,23 @@ export const useStore = defineStore('main', {
         },
         body
       })
+    },
+
+    async jsCheckUpdate({ index }: any) {
+      const info: { result: false, err: string } | {
+        result: true,
+        old: string,
+        new: string,
+        tempFileName: string,
+      } = await backend.post(urlPrefix + '/js/check_update', { index })
+      return info
+    },
+
+    async jsUpdate({ index, tempFileName }: any) {
+      const res: {result: false, err: string} | {
+        result: true,
+      } = await backend.post(urlPrefix + '/js/update', { index, tempFileName })
+      return res
     },
 
     async toolOnebot() {

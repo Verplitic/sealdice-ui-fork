@@ -134,6 +134,19 @@
     <el-form-item>
       <template #label>
         <div>
+          <el-text>发送测试邮件</el-text>
+          <el-tooltip content="向通知列表发送测试邮件，便于检查邮件相关配置">
+            <el-icon><question-filled /></el-icon>
+          </el-tooltip>
+        </div>
+      </template>
+      <el-button type="primary" @click="mailTest">发送</el-button>
+    </el-form-item>
+
+
+    <el-form-item>
+      <template #label>
+        <div>
           <span>私骰模式</span>
           <el-tooltip raw-content content="只允许信任用户拉入群聊">
             <el-icon><question-filled /></el-icon>
@@ -214,40 +227,40 @@
       <el-input v-model="config.aliveNoticeValue" style="width: 12rem"></el-input>
     </el-form-item>
 
-    <el-form-item>
-      <template #label>
-        <div>
-          <span>.help 骰主</span>
-        </div>
-      </template>
-      <el-input v-model="config.helpMasterInfo" type="textarea" clearable style="width: 14rem;" />
-    </el-form-item>
+<!--    <el-form-item>-->
+<!--      <template #label>-->
+<!--        <div>-->
+<!--          <span>.help 骰主</span>-->
+<!--        </div>-->
+<!--      </template>-->
+<!--      <el-input v-model="config.helpMasterInfo" type="textarea" clearable style="width: 14rem;" />-->
+<!--    </el-form-item>-->
 
-    <el-form-item>
-      <template #label>
-        <div>
-          <span>.help 协议</span>
-        </div>
-      </template>
-      <el-input v-model="config.helpMasterLicense" type="textarea" autosize clearable style="width: 14rem;" />
-    </el-form-item>
+<!--    <el-form-item>-->
+<!--      <template #label>-->
+<!--        <div>-->
+<!--          <span>.help 协议</span>-->
+<!--        </div>-->
+<!--      </template>-->
+<!--      <el-input v-model="config.helpMasterLicense" type="textarea" autosize clearable style="width: 14rem;" />-->
+<!--    </el-form-item>-->
 
-    <el-form-item>
-      <template #label>
-        <div>
-          <span>.draw keys自定义</span>
-        </div>
-      </template>
-      <div>
-        <div>
-          <el-checkbox label="开启" v-model="config.customDrawKeysTextEnable"/>
-          <el-tooltip raw-content content="启用后替代原本的.draw keys牌组关键字文本">
-            <el-icon><question-filled /></el-icon>
-          </el-tooltip>
-        </div>
-        <el-input v-model="config.customDrawKeysText" type="textarea" autosize clearable style="width: 14rem;" />
-      </div>
-    </el-form-item>
+<!--    <el-form-item>-->
+<!--      <template #label>-->
+<!--        <div>-->
+<!--          <span>.draw keys自定义</span>-->
+<!--        </div>-->
+<!--      </template>-->
+<!--      <div>-->
+<!--        <div>-->
+<!--          <el-checkbox label="开启" v-model="config.customDrawKeysTextEnable"/>-->
+<!--          <el-tooltip raw-content content="启用后替代原本的.draw keys牌组关键字文本">-->
+<!--            <el-icon><question-filled /></el-icon>-->
+<!--          </el-tooltip>-->
+<!--        </div>-->
+<!--        <el-input v-model="config.customDrawKeysText" type="textarea" autosize clearable style="width: 14rem;" />-->
+<!--      </div>-->
+<!--    </el-form-item>-->
 
     <el-form-item>
       <template #label>
@@ -266,14 +279,14 @@
       </div>
     </el-form-item>
 
-    <el-form-item>
-      <template #label>
-        <div>
-          <span>.bot 附加文本</span>
-        </div>
-      </template>
-      <el-input v-model="config.customBotExtraText" type="textarea" autosize clearable style="width: 14rem;" />
-    </el-form-item>
+<!--    <el-form-item>-->
+<!--      <template #label>-->
+<!--        <div>-->
+<!--          <span>.bot 附加文本</span>-->
+<!--        </div>-->
+<!--      </template>-->
+<!--      <el-input v-model="config.customBotExtraText" type="textarea" autosize clearable style="width: 14rem;" />-->
+<!--    </el-form-item>-->
 
     <h2>刷屏警告</h2>
     <el-form-item>
@@ -300,21 +313,23 @@
     </el-form-item>
 
     <el-form-item>
-      上限 <el-input v-model="config.customBurst" clearable style="width: 14rem;" />
+      上限 <el-input-number v-model="config.customBurst" :min="1" :step="1" clearable/>
     </el-form-item>
 
     <el-form-item>
-      <div>
-        刷屏警告工作原理如下：
-        <ul>
-          <li>有一个装令牌的桶，桶最多能装【上限】枚令牌</li>
-          <li>每次指令视作拿走一枚令牌</li>
-          <li>当桶里没有令牌时，试图拿走令牌将被阻止（触发警告）</li>
-          <li>桶以【速率】自动补充令牌</li>
-        </ul>
-      </div>
-      <div>如果您感觉难以理解，为了稳定性还是不要更改比较好！</div>
-      <div>对速率限制的所有更改<b>重启后生效</b></div>
+      <el-text>
+        <div>
+          刷屏警告工作原理如下：
+          <ul>
+            <li>每群每用户独立有一个装令牌的桶，桶最多能装「上限」枚令牌</li>
+            <li>每次指令视作拿走一枚令牌</li>
+            <li>当桶里没有令牌时，试图拿走令牌将被阻止（触发警告）</li>
+            <li>桶以「速率」自动补充令牌</li>
+          </ul>
+        </div>
+        <div>如果您感觉难以理解，为了稳定性还是不要更改比较好！</div>
+        <div>对速率限制的所有更改 <strong>重启后生效</strong> </div>
+      </el-text>
     </el-form-item>
 
     <h2>访问控制</h2>
@@ -711,6 +726,15 @@ const nameWrapUncheck = (v: boolean) => {
     ).catch(e => {
       config.value.playerNameWrapEnable = true;
     })
+  }
+}
+
+const mailTest = async () => {
+  const res = await store.diceMailTest()
+  if (res.result) {
+    ElMessage.success("已尝试发送测试邮件")
+  } else {
+    ElMessage.error("发送测试邮件失败！" + res.err)
   }
 }
 

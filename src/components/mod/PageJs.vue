@@ -9,7 +9,12 @@
       <el-text type="danger" size="large" tag="strong">存在修改，需要重载后生效！</el-text>
     </div>
   </el-affix>
-
+  <el-affix :offset="70" v-if="jsConfigEdited">
+    <div class="tip-danger">
+      <el-text type="danger" size="large" tag="strong">配置内容已修改，不要忘记保存！</el-text>
+        <el-button class="button" type="primary" :icon="DocumentChecked" :disabled="!jsConfigEdited" @click="doJsConfigSave()">点我保存</el-button>
+    </div>
+  </el-affix>
   <el-row>
     <el-col :span="24">
       <el-tabs v-model="mode" class="demo-tabs" :stretch=true>
@@ -40,31 +45,269 @@
             </el-space>
           </header>
           <main class="js-list-main">
-            <el-card class="js-item" v-for="i, index in jsList" :key="index" shadow="hover">
+            <el-card class="js-item" v-for="(i, index) of jsList" :key="index" shadow="hover">
+              <template #header>
+                <div class="js-item-header">
+                  <template v-if="!i.errText">
+                    <el-space>
+                      <el-switch v-model="i.enable" @change="changejsScriptStatus(i.name, i.enable)" :disabled="i.errText !== ''"
+                                 style="--el-switch-on-color: var(--el-color-success); --el-switch-off-color: var(--el-color-danger)" />
+                      <el-text size="large" tag="b">{{ i.name }}</el-text>
+                      <el-text>{{ i.version || '&lt;未定义>' }}</el-text>
+                    </el-space>
+                    <el-space>
+                      <el-popconfirm v-if="i.updateUrls && i.updateUrls.length > 0" width="220"
+                                     confirm-button-text="确认"
+                                     cancel-button-text="取消"
+                                     @confirm="doCheckUpdate(i, index)"
+                                     title="更新地址由插件作者提供，是否确认要检查该插件更新？">
+                        <template #reference>
+                          <el-button :icon="Download" type="success" size="small" plain :loading="diffLoading">更新</el-button>
+                        </template>
+                      </el-popconfirm>
+                      <!--                    <el-button :icon="Setting" type="primary" size="small" plain @click="showSettingDialog = true">设置</el-button>-->
+                      <el-button @click="doDelete(i, index)" :icon="Delete" type="danger" size="small" plain>删除</el-button>
+                    </el-space>
+                  </template>
+                  <template v-else>
+                    <el-space alignment="center">
+                      <el-icon size="20" color="var(--el-color-danger)"><circle-close/></el-icon>
+                      <del>
+                        <el-text size="large" tag="b">{{ i.filename }}</el-text>
+                      </del>
+                    </el-space>
+                    <el-space>
+                      <el-button @click="doDelete(i, index)" :icon="Delete" type="danger" size="small">删除</el-button>
+                    </el-space>
+                  </template>
+                </div>
+              </template>
+
+              <el-descriptions>
+                <template v-if="!i.errText">
+                  <el-descriptions-item :span="3" label="作者">{{ i.author || '&lt;佚名>' }}</el-descriptions-item>
+                  <el-descriptions-item :span="3" label="介绍">{{ i.desc || '&lt;暂无>' }}</el-descriptions-item>
+                  <el-descriptions-item :span="3" label="主页">{{ i.homepage || '&lt;暂无>' }}</el-descriptions-item>
+                  <el-descriptions-item label="许可协议">{{ i.license || '&lt;暂无>' }}</el-descriptions-item>
+                  <el-descriptions-item label="安装时间">{{ dayjs.unix(i.installTime).fromNow() }}</el-descriptions-item>
+                  <el-descriptions-item label="更新时间">
+                    {{ i.updateTime ? dayjs.unix(i.updateTime).fromNow() : '' || '&lt;暂无>' }}
+                  </el-descriptions-item>
+                </template>
+                <template v-else>
+                  <el-descriptions-item label="错误信息">
+                    <el-text type="danger">{{ i.errText }}</el-text>
+                  </el-descriptions-item>
+                </template>
+              </el-descriptions>
+            </el-card>
+
+            <el-dialog v-model="showDiff" title="插件内容对比" class="diff-dialog">
+              <diff-viewer lang="javascript" :old="jsCheck.old" :new="jsCheck.new"/>
+              <template #footer>
+                <el-space wrap>
+                  <el-button @click="showDiff = false">取消</el-button>
+                  <el-button v-if="!(jsCheck.old === jsCheck.new)" type="success" :icon="DocumentChecked" @click="jsUpdate">确认更新</el-button>
+                </el-space>
+              </template>
+            </el-dialog>
+
+<!--            <el-dialog v-model="showSettingDialog" title="设置项">-->
+<!--              <el-form :model="settingForm">-->
+<!--                <el-form-item v-for="p of settingForm.props" :key="p.key" :label="p.name ?? p.key">-->
+<!--                  <el-input v-model="p.value"/>-->
+<!--                </el-form-item>-->
+<!--              </el-form>-->
+<!--              <template #footer>-->
+<!--            <span class="dialog-footer">-->
+<!--              <el-button @click="showSettingDialog = false">取消</el-button>-->
+<!--              <el-button type="primary" @click="showSettingDialog = false">-->
+<!--                提交-->
+<!--              </el-button>-->
+<!--            </span>-->
+<!--              </template>-->
+<!--            </el-dialog>-->
+          </main>
+        </el-tab-pane>
+        <el-tab-pane label="插件设置" name="config">
+          <main>
+            <el-descriptions>
+              <el-descriptions-item v-if="size(jsConfig as Map<any,any>) === 0">
+                <el-text size="large" tag="strong">暂无设置项</el-text>
+              </el-descriptions-item>
+            </el-descriptions>
+            <el-card class="js-item" v-for="i in jsConfig" >
               <template #header>
                 <div class="js-item-header">
                   <el-space>
-                    <el-switch v-model="i.enable" @change="changejsScriptStatus(i.name, i.enable)"
-                      style="--el-switch-on-color: #67C23A; --el-switch-off-color: #F56C6C" />
-                    <el-text size="large" tag="b">{{ i.name }}</el-text>
-                    <el-text>{{ i.version || '<未定义>' }}</el-text>
-                  </el-space>
-                  <el-space>
-                    <el-button @click="doDelete(i, index)" :icon="Delete" type="danger" size="small" plain>删除</el-button>
+                    <el-text size="large">{{ (i as unknown as JsPluginConfig)['pluginName'] }}</el-text>
                   </el-space>
                 </div>
               </template>
-              <el-descriptions>
-                <el-descriptions-item :span="3" label="作者">{{ i.author || '<佚名>' }}</el-descriptions-item>
-                <el-descriptions-item :span="3" label="介绍">{{ i.desc || '<暂无>' }}</el-descriptions-item>
-                <el-descriptions-item :span="3" label="主页">{{ i.homepage || '<暂无>' }}</el-descriptions-item>
-                <el-descriptions-item label="许可协议">{{ i.license || '<暂无>' }}</el-descriptions-item>
-                <el-descriptions-item label="安装时间">{{ dayjs.unix(i.installTime).fromNow() }}</el-descriptions-item>
-                <el-descriptions-item label="更新时间">
-                  {{ i.updateTime ? dayjs.unix(i.updateTime).fromNow() : '' || '<暂无>' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="报错信息" :span="3" v-if="i.errText">{{ i.errText }}</el-descriptions-item>
-              </el-descriptions>
+              <el-form v-for="c in (i as unknown as JsPluginConfig)['configs']" >
+                <template #header>
+                  <div class="js-item-header">
+                    <el-space>
+                      <el-text size="large">{{ (c as unknown as JsPluginConfigItem).key }}</el-text>
+                    </el-space>
+                  </div>
+                </template>
+                <el-form-item v-if="(c as unknown as JsPluginConfigItem).type == 'string'">
+                  <el-form-item label="字符串配置项:">{{(c as unknown as JsPluginConfigItem).key}}</el-form-item>
+                  <el-form-item :span="30">
+                    <div style="margin-left: 1rem;">
+                      <el-input v-model="(c as unknown as JsPluginConfigItem).value" @change="doJsConfigChanged()"></el-input>
+                    </div>
+                  </el-form-item>
+                  <template v-if="(c as unknown as JsPluginConfigItem).value !== (c as unknown as JsPluginConfigItem).defaultValue">
+                    <el-tooltip content="重置为初始值" placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doResetJsConfig((i as unknown as JsPluginConfig)['pluginName'],(c as unknown as JsPluginConfigItem).key)">
+                        <brush-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <template v-if="(c as unknown as JsPluginConfigItem).deprecated">
+                    <el-tooltip content="移除 - 这个配置在新版的默认配置中不被使用，<br />但升级而来时仍可能被使用，请确认无用后删除" raw-content
+                                placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doDeleteUnusedConfig((i as unknown as JsPluginConfig)['pluginName'], (c as unknown as JsPluginConfigItem).key)">
+                        <delete-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                </el-form-item>
+                <el-form-item v-if="(c as unknown as JsPluginConfigItem).type == 'int'">
+                  <el-form-item label="整数配置项:">{{(c as unknown as JsPluginConfigItem).key}}</el-form-item>
+                  <el-form-item :span="30">
+                    <div style="margin-left: 1rem;">
+                      <el-input-number v-model="(c as unknown as JsPluginConfigItem).value" type="number" @change="doJsConfigChanged()"></el-input-number>
+                    </div>
+                  </el-form-item>
+                  <template v-if="(c as unknown as JsPluginConfigItem).value !== (c as unknown as JsPluginConfigItem).defaultValue">
+                    <el-tooltip content="重置为初始值" placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doResetJsConfig((i as unknown as JsPluginConfig)['pluginName'],(c as unknown as JsPluginConfigItem).key)">
+                        <brush-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <template v-if="(c as unknown as JsPluginConfigItem).deprecated">
+                    <el-tooltip content="移除 - 这个配置在新版的默认配置中不被使用，<br />但升级而来时仍可能被使用，请确认无用后删除" raw-content
+                                placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doDeleteUnusedConfig((i as unknown as JsPluginConfig)['pluginName'], (c as unknown as JsPluginConfigItem).key)">
+                        <delete-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                </el-form-item>
+                <el-form-item v-if="(c as unknown as JsPluginConfigItem).type == 'float'">
+                  <el-form-item label="浮点数配置项:">{{(c as unknown as JsPluginConfigItem).key}}</el-form-item>
+                  <el-form-item :span="30">
+                    <div style="margin-left: 1rem;">
+                      <el-input-number v-model="(c as unknown as JsPluginConfigItem).value" type="number" @change="doJsConfigChanged()"></el-input-number>
+                    </div>
+                  </el-form-item>
+                  <template v-if="(c as unknown as JsPluginConfigItem).value !== (c as unknown as JsPluginConfigItem).defaultValue">
+                    <el-tooltip content="重置为初始值" placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doResetJsConfig((i as unknown as JsPluginConfig)['pluginName'],(c as unknown as JsPluginConfigItem).key)">
+                        <brush-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <template v-if="(c as unknown as JsPluginConfigItem).deprecated">
+                    <el-tooltip content="移除 - 这个配置在新版的默认配置中不被使用，<br />但升级而来时仍可能被使用，请确认无用后删除" raw-content
+                                placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doDeleteUnusedConfig((i as unknown as JsPluginConfig)['pluginName'], (c as unknown as JsPluginConfigItem).key)">
+                        <delete-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                </el-form-item>
+                <el-form-item v-if="(c as unknown as JsPluginConfigItem).type == 'bool'">
+                  <el-form-item label="布尔配置项:">{{(c as unknown as JsPluginConfigItem).key}}</el-form-item>
+                  <el-form-item :span="30" >
+                    <div style="margin-left: 1rem;">
+                      <el-switch v-model="(c as unknown as JsPluginConfigItem).value" @change="doJsConfigChanged()"></el-switch>
+                    </div>
+                  </el-form-item>
+                  <template v-if="(c as unknown as JsPluginConfigItem).value !== (c as unknown as JsPluginConfigItem).defaultValue">
+                    <el-tooltip content="重置为初始值" placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doResetJsConfig((i as unknown as JsPluginConfig)['pluginName'],(c as unknown as JsPluginConfigItem).key)">
+                        <brush-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <template v-if="(c as unknown as JsPluginConfigItem).deprecated">
+                    <el-tooltip content="移除 - 这个配置在新版的默认配置中不被使用，<br />但升级而来时仍可能被使用，请确认无用后删除" raw-content
+                                placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doDeleteUnusedConfig((i as unknown as JsPluginConfig)['pluginName'], (c as unknown as JsPluginConfigItem).key)">
+                        <delete-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                </el-form-item>
+                <el-form-item v-if="(c as unknown as JsPluginConfigItem).type == 'template'">
+                  <el-form-item label="模板配置项:">{{(c as unknown as JsPluginConfigItem).key}}</el-form-item>
+                  <template v-if="!isEqual((c as unknown as JsPluginConfigItem).value, (c as unknown as JsPluginConfigItem).defaultValue)">
+                    <el-tooltip content="重置为初始值" placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doResetJsConfig((i as unknown as JsPluginConfig)['pluginName'],(c as unknown as JsPluginConfigItem).key)">
+                        <brush-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <template v-if="(c as unknown as JsPluginConfigItem).deprecated">
+                    <el-tooltip content="移除 - 这个配置在新版的默认配置中不被使用，<br />但升级而来时仍可能被使用，请确认无用后删除" raw-content
+                                placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doDeleteUnusedConfig((i as unknown as JsPluginConfig)['pluginName'], (c as unknown as JsPluginConfigItem).key)">
+                        <delete-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <el-form-item :span="15">
+                    <div v-for="d, indexd in (c as unknown as JsPluginConfigItem).value" style="width: 100%; margin-bottom: .5rem;">
+                      <!-- 这里面是单条修改项 -->
+                      <el-row>
+                        <el-col :span="10">
+                          <span style="width: 100%;">
+                            <el-input type="textarea" v-model="((c as unknown as JsPluginConfigItem).value)[indexd]" :autosize="true" @change="doJsConfigChanged()"></el-input>
+                          </span>
+                        </el-col>
+                        <el-col :span="5">
+                          <div style="display: flex; align-items: center; width: 1.3rem; margin-left: 1rem; margin-top: .5rem">
+                            <el-tooltip :content="indexd === 0 ? '点击添加一项' : '点击删除你不想要的配置项'" placement="bottom-start">
+                              <el-icon>
+                                <circle-plus-filled v-if="indexd == 0" @click="doJsConfigAddItem((c as unknown as JsPluginConfigItem).value)" />
+                                <circle-close v-else @click="doJsConfigRemoveItemAt((c as unknown as JsPluginConfigItem).value, indexd)" />
+                              </el-icon>
+                            </el-tooltip>
+                          </div>
+                        </el-col>
+                      </el-row>
+                    </div>
+                  </el-form-item>
+                </el-form-item>
+                <el-form-item v-if="(c as unknown as JsPluginConfigItem).type == 'option'">
+                  <el-form-item label="选项配置项:">{{(c as unknown as JsPluginConfigItem).key}}</el-form-item>
+                  <template v-if="(c as unknown as JsPluginConfigItem).value !== (c as unknown as JsPluginConfigItem).defaultValue">
+                    <el-tooltip content="重置为初始值" placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doResetJsConfig((i as unknown as JsPluginConfig)['pluginName'],(c as unknown as JsPluginConfigItem).key)">
+                        <brush-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <template v-if="(c as unknown as JsPluginConfigItem).deprecated">
+                    <el-tooltip content="移除 - 这个配置在新版的默认配置中不被使用，<br />但升级而来时仍可能被使用，请确认无用后删除" raw-content
+                                placement="bottom-end">
+                      <el-icon style="float: right; margin-left: 1rem;" @click="doDeleteUnusedConfig((i as unknown as JsPluginConfig)['pluginName'], (c as unknown as JsPluginConfigItem).key)">
+                        <delete-filled />
+                      </el-icon>
+                    </el-tooltip>
+                  </template>
+                  <div style="margin-left: 1rem;">
+                    <el-select v-model="(c as unknown as JsPluginConfigItem).value" @change="doJsConfigChanged()">
+                      <el-option v-for="s in (c as unknown as JsPluginConfigItem).option" :value="s">{{s}}</el-option>
+                    </el-select>
+                  </div>
+                </el-form-item>
+              </el-form>
             </el-card>
           </main>
         </el-tab-pane>
@@ -75,13 +318,27 @@
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useStore } from '~/store'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, CaretRight, Upload, Search, Delete } from '@element-plus/icons-vue'
+import {onBeforeUnmount, onMounted, ref, watch} from 'vue';
+import {useStore} from '~/store'
+import {ElMessage, ElMessageBox} from 'element-plus'
+import {
+  BrushFilled,
+  CaretRight,
+  CircleClose,
+  CirclePlusFilled,
+  Delete,
+  DeleteFilled,
+  DocumentChecked,
+  Download,
+  Refresh,
+  Search,
+  Upload
+} from '@element-plus/icons-vue'
 import * as dayjs from 'dayjs'
-import { EditorView, basicSetup } from "codemirror"
-import { javascript } from "@codemirror/lang-javascript"
+import {basicSetup, EditorView} from "codemirror"
+import {javascript} from "@codemirror/lang-javascript"
+import DiffViewer from "~/components/mod/diff-viewer.vue";
+import {isEqual, size} from "lodash-es";
 
 const store = useStore()
 const jsEnable = ref(false)
@@ -138,6 +395,69 @@ const doExecute = async () => {
   jsLines.value = lines
 }
 
+let jsConfigEdited = ref(false)
+const doJsConfigChanged = () => {
+  jsConfigEdited.value = true
+}
+
+const doDeleteUnusedConfig = (pluginName: any, key: any) => {
+  ElMessageBox.confirm(
+    `删除插件 ${pluginName} 的配置项 ${key} ，确定吗？`,
+    '删除',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async (data) => {
+    await store.jsDeleteUnusedConfig(pluginName, key )
+    setTimeout(() => {
+      // 稍等等再重载，以免出现没删掉
+      refreshConfig()
+    }, 1000);
+    ElMessage.success('配置项已删除')
+  })
+}
+
+const doResetJsConfig = (plginName: string, key: string) => {
+  ElMessageBox.confirm(
+      '重置这条配置项回默认状态，确定吗？',
+      '警告',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+  ).then(async () => {
+    await store.jsResetConfig(plginName, key)
+    ElMessage({
+      type: 'success',
+      message: '成功!',
+    })
+    setTimeout(() => {
+      refreshConfig()
+    }, 1000);
+  })
+}
+const doJsConfigAddItem = (arr: any[]) => {
+  arr.push("");
+  doJsConfigChanged()
+  return arr;
+}
+const doJsConfigRemoveItemAt = <T>(arr: T[], index: number) => {
+  if (index < 0 || index >= arr.length) {
+    return arr;
+  }
+  arr.splice(index, 1);
+  doJsConfigChanged()
+  return arr;
+}
+
+const doJsConfigSave = async () => {
+  await store.jsSetConfig(jsConfig.value)
+    jsConfigEdited.value = false
+    ElMessage.success('已保存')
+}
 
 let timerId: number
 
@@ -173,6 +493,7 @@ onMounted(async () => {
   if (jsList.value.length > 0) {
     mode.value = 'list'
   }
+  await refreshConfig();
 
   timerId = setInterval(async () => {
     console.log('refresh')
@@ -190,6 +511,7 @@ onBeforeUnmount(() => {
 
 
 const jsList = ref<JsScriptInfo[]>([]);
+const jsConfig = ref<Map<string, JsPluginConfig>>(new Map<string, JsPluginConfig>());
 const uploadFileList = ref<any[]>([]);
 
 const jsVisitDir = async () => {
@@ -204,6 +526,10 @@ const jsStatus = async () => {
 const refreshList = async () => {
   const lst = await store.jsList();
   jsList.value = lst;
+}
+
+const refreshConfig = async () => {
+  jsConfig.value = await store.jsGetConfig();
 }
 
 const jsReload = async () => {
@@ -279,6 +605,66 @@ const changejsScriptStatus = async (name: string, status: boolean) => {
   }
   needReload.value = true
   return true
+}
+
+const showSettingDialog = ref<boolean>(false)
+
+interface DeckProp {
+  key:  string
+  value: string
+
+  name?: string
+  desc?: string
+  required?: boolean
+  default?: string
+}
+
+const settingForm = ref({
+  props: [{key: "name", value: "test props"}] as DeckProp[]
+})
+
+const showDiff = ref<boolean>(false)
+const diffLoading = ref<boolean>(false)
+
+interface JsCheckResult {
+  old: string,
+  new: string,
+  tempFileName: string,
+  index: number,
+}
+
+const jsCheck = ref<JsCheckResult>({
+  old: "",
+  new: "",
+  tempFileName: "",
+  index: -1
+})
+
+const doCheckUpdate = async (data: any, index: number) => {
+  diffLoading.value = true
+  const checkResult = await store.jsCheckUpdate({ index });
+  diffLoading.value = false
+  if (checkResult.result) {
+    jsCheck.value = { ...checkResult, index }
+    showDiff.value = true
+  } else {
+    ElMessage.error('检查更新失败！' + checkResult.err)
+  }
+}
+
+const jsUpdate = async () => {
+  const res = await store.jsUpdate(jsCheck.value);
+  if (res.result) {
+    showDiff.value = false
+    needReload.value = true
+    setTimeout(() => {
+      refreshList()
+    }, 1000)
+    ElMessage.success('更新成功，请手动重载后生效')
+  } else {
+    showDiff.value = false
+    ElMessage.error('更新失败！' + res.err)
+  }
 }
 </script>
 

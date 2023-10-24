@@ -13,12 +13,12 @@
 
   <div style="display: flex; flex-wrap: wrap;">
     <div v-for="i, index in reactive(store.curDice.conns)" style="min-width: 20rem; flex: 1 0 50%; flex-grow: 0;">
-      <el-card class="box-card" style="margin-right: 1rem; margin-bottom: 1rem; position: relative">
+      <el-card class="box-card" shadow="hover" style="margin-right: 1rem; margin-bottom: 1rem; position: relative">
         <template #header>
           <div class="card-header">
             <span style="word-break: break-all;">{{i.nickname || '<"未知">'}}({{i.userId}})</span>
             <!-- <el-button class="button" type="text"  @click="doModify(i, index)">修改</el-button> -->
-            <el-button class="button" type="text"  @click="doRemove(i)">删除</el-button>
+            <el-button size="small" type="danger" :icon="Delete" plain @click="doRemove(i)">删除</el-button>
           </div>
         </template>
 
@@ -60,10 +60,10 @@
 
           <el-form-item label="状态">
             <el-space>
-              <div v-if="i.state === 0"><el-tag type="danger">断开</el-tag></div>
-              <div v-if="i.state === 2"><el-tag type="warning">连接中</el-tag></div>
-              <div v-if="i.state === 1"><el-tag type="success">已连接</el-tag></div>
-              <div v-if="i.state === 3"><el-tag type="danger">失败</el-tag></div>
+              <div v-if="i.state === 0"><el-tag type="danger" disable-transitions>断开</el-tag></div>
+              <div v-if="i.state === 2"><el-tag type="warning" disable-transitions>连接中</el-tag></div>
+              <div v-if="i.state === 1"><el-tag type="success" disable-transitions>已连接</el-tag></div>
+              <div v-if="i.state === 3"><el-tag type="danger" disable-transitions>失败</el-tag></div>
               <el-tooltip :content="`看到这个标签是因为最近20分钟内有风控警告，将在重新登录后临时消除。触发时间: ` + dayjs.unix(i.adapter?.inPackGoCqHttpLastRestricted).fromNow()" v-if="Math.round(new Date().getTime()/1000) - i.adapter?.inPackGoCqHttpLastRestricted < 30 * 60">
                 <el-tag type="warning">风控</el-tag>
               </el-tooltip>
@@ -87,12 +87,12 @@
             <div v-else>从未</div>
           </el-form-item>
 
-          <el-form-item label="连接地址">
+          <el-form-item label="连接地址" v-if="i.adapter?.connectUrl">
             <!-- <el-input v-model="i.connectUrl"></el-input> -->
             <div>{{i.adapter?.connectUrl}}</div>
           </el-form-item>
 
-          <template v-if="i.platform === 'QQ'">
+          <template v-if="i.platform === 'QQ' && (i.protocolType === 'onebot' || i.protocolType === 'walle-q')">
             <!-- <el-form-item label="忽略好友请求">
               <div>{{i.adapter?.ignoreFriendRequest ? '是' : '否'}}</div>
             </el-form-item> -->
@@ -108,6 +108,10 @@
               <!-- <el-button type="primary" class="btn-add" :icon="Plus" circle @click="addOne"></el-button> -->
               <el-button size="small" type="primary" style="margin-left: 1rem" @click="askSetData(i)" :icon="Edit"></el-button>
             </el-form-item>
+            <el-form-item label="协议版本" v-if="i.adapter.useInPackGoCqhttp">
+              <div v-if="i.adapter?.inPackGoCqHttpAppVersion === ''">未指定</div>
+              <div v-if="i.adapter?.inPackGoCqHttpAppVersion && i.adapter.inPackGoCqHttpAppVersion !== ''">{{ i.adapter.inPackGoCqHttpAppVersion }}</div>
+            </el-form-item>
             <el-form-item label="协议实现" v-if="i.adapter.useInPackGoCqhttp">
               <!-- <el-input v-model="i.connectUrl"></el-input> -->
               <div v-if="i.adapter?.implementation === 'gocq' || i.adapter?.implementation===''">Go-Cqhttp</div>
@@ -116,6 +120,18 @@
             </el-form-item>
             <el-form-item label="特殊" v-else>
               <div>分离部署</div>
+            </el-form-item>
+          </template>
+
+          <template v-if="i.platform === 'QQ' && i.protocolType === 'red'">
+            <el-form-item label="协议">
+              <div>[WIP]Red</div>
+            </el-form-item>
+            <el-form-item label="协议版本">
+              <div>{{ i.adapter?.redVersion || '未知' }}</div>
+            </el-form-item>
+            <el-form-item label="连接地址">
+              <div>{{ i.adapter?.host + ":" + i.adapter?.port }}</div>
             </el-form-item>
           </template>
 
@@ -168,6 +184,24 @@
         </el-select>
       </el-form-item>
 
+      <el-form-item :label-width="formLabelWidth" v-if="form.accountType === 0 && (form.protocol === 1 || form.protocol === 6)">
+        <template #label>
+          <div style="display: flex; align-items: center;">
+            <span>版本</span>
+            <el-tooltip content="只有需要升级协议版本时才指定。" style="">
+              <el-icon>
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
+          </div>
+        </template>
+        <el-select v-model="form.appVersion">
+          <el-option v-for="version of supportedQQVersions"
+                     :key="version" :value="version"
+                     :label="version || '不指定版本'" />
+        </el-select>
+      </el-form-item>
+
       <el-form-item v-if="form.accountType === 0 && (form.protocol === 1 || form.protocol === 6)"
           :label-width="formLabelWidth">
           <template #label>
@@ -190,7 +224,7 @@
           v-if="form.accountType === 0 && (form.protocol === 1 || form.protocol === 6) && signConfigType === 'simple'"
           label="服务url" :label-width="formLabelWidth">
           <el-input v-model="form.signServerConfig.signServers[0].url" type="string" autocomplete="off"
-            placeholder="http://127.0.0.1:8080"></el-input>
+            placeholder="http://127.0.0.1:13579"></el-input>
         </el-form-item>
         <el-form-item
           v-if="form.accountType === 0 && (form.protocol === 1 || form.protocol === 6) && signConfigType === 'simple'"
@@ -202,7 +236,7 @@
           v-if="form.accountType === 0 && (form.protocol === 1 || form.protocol === 6) && signConfigType === 'simple'"
           label="服务鉴权" :label-width="formLabelWidth">
           <el-input v-model="form.signServerConfig.signServers[0].authorization" type="string" autocomplete="off"
-            placeholder="Bearer xxxx"></el-input>
+            placeholder="Bearer xxxx 未设置可不填"></el-input>
         </el-form-item>
 
         <el-form-item
@@ -380,11 +414,14 @@
   <el-dialog v-model="dialogFormVisible" title="帐号登录" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false" class="the-dialog">
     <el-button style="float: right; margin-top: -4rem;" @click="openSocks">辅助工具-13325端口</el-button>
     <template v-if="form.step === 1">
+      <el-alert v-if="form.accountType === 7" type="warning" :closable="false" style="margin-bottom: 1.5rem;">该支持仍处于实验阶段，部分功能尚未完善。海豹不保证该支持的稳定性和持续性，并存在未来移除该支持的可能，请谨慎选择。</el-alert>
+
       <el-form :model="form">
         <el-form-item label="账号类型" :label-width="formLabelWidth">
           <el-select v-model="form.accountType">
             <el-option label="QQ账号" :value="0"></el-option>
             <el-option label="QQ账号(gocq分离部署)" :value="6"></el-option>
+            <el-option label="[WIP]QQ账号(red协议)" :value="7"></el-option>
             <el-option label="Discord账号" :value="1"></el-option>
             <el-option label="KOOK(开黑啦)账号" :value="2"></el-option>
             <el-option label="Telegram帐号" :value="3"></el-option>
@@ -402,6 +439,24 @@
             <el-option label="iPad" :value="5"></el-option>
             <el-option v-if="form.implementation === 'gocq' || form.implementation === ''" label="AndroidPad - 可共存" :value="6"></el-option>
             <!-- <el-option label="MacOS" :value="3"></el-option> -->
+          </el-select>
+        </el-form-item>
+
+        <el-form-item :label-width="formLabelWidth" v-if="form.accountType === 0 && (form.protocol === 1 || form.protocol === 6)">
+          <template #label>
+            <div style="display: flex; align-items: center;">
+              <span>版本</span>
+              <el-tooltip content="只有需要升级协议版本时才指定。" style="">
+                <el-icon>
+                  <QuestionFilled />
+                </el-icon>
+              </el-tooltip>
+            </div>
+          </template>
+          <el-select v-model="form.appVersion">
+            <el-option v-for="version of supportedQQVersions"
+                       :key="version" :value="version"
+                       :label="version || '不指定版本'" />
           </el-select>
         </el-form-item>
         <!-- <el-form-item v-if="form.accountType === 0" label="协议实现" :label-width="formLabelWidth" required>
@@ -649,6 +704,16 @@
           <el-input v-model="form.accessToken" placeholder="gocqhttp配置的access token，没有不用填写" type="text" autocomplete="off"></el-input>
         </el-form-item>
 
+        <el-form-item v-if="form.accountType === 7" label="主机" :label-width="formLabelWidth" required>
+          <el-input v-model="form.host" placeholder="Red 服务的地址，如 127.0.0.1" type="text" autocomplete="off"></el-input>
+        </el-form-item>
+        <el-form-item v-if="form.accountType === 7" label="端口" :label-width="formLabelWidth" required>
+          <el-input-number v-model="form.port" placeholder="16530" autocomplete="off"></el-input-number>
+        </el-form-item>
+        <el-form-item v-if="form.accountType === 7" label="令牌" :label-width="formLabelWidth" required>
+          <el-input v-model="form.token" placeholder="Red 服务的 token" type="text" autocomplete="off"></el-input>
+        </el-form-item>
+
         <el-form-item v-if="form.accountType === 1" label="Token" :label-width="formLabelWidth" required>
           <el-input v-model="form.token" type="string" autocomplete="off"></el-input>
           <small>
@@ -682,6 +747,9 @@
             <div>把机器人的token复制下来粘贴进来</div>
 
           </small>
+        </el-form-item>
+        <el-form-item v-if="form.accountType === 3" label="http 代理地址" :label-width="formLabelWidth">
+          <el-input v-model="form.proxyURL" type="string" autocomplete="off" placeholder="http://127.0.0.1:7890"/>
         </el-form-item>
 
         <el-form-item v-if="form.accountType === 4" label="Url" :label-width="formLabelWidth" required>
@@ -809,7 +877,8 @@
               (form.accountType === 1 || form.accountType === 2 || form.accountType === 3) && form.token === '' ||
               form.accountType === 4 && form.url === '' ||
               form.accountType === 5 && (form.clientID === '' || form.token === '') ||
-              form.accountType === 6 && (form.account === '' || form.connectUrl === '' || form.relWorkDir === '')">
+              form.accountType === 6 && (form.account === '' || form.connectUrl === '' || form.relWorkDir === '') ||
+              form.accountType === 7 && (form.host === '' || form.port === '' || form.token === '')">
             下一步</el-button>
         </template>
         <template v-if="form.isEnd">
@@ -834,7 +903,7 @@ import { h, reactive, onBeforeMount, onBeforeUnmount, onMounted, ref, nextTick, 
 import { useStore, goCqHttpStateCode } from '~/store';
 import type { DiceConnection } from '~/store';
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, QuestionFilled } from '@element-plus/icons-vue'
+import {Plus, Edit, QuestionFilled, Delete} from '@element-plus/icons-vue'
 import { sleep } from '~/utils'
 import { delay } from 'lodash-es'
 import * as dayjs from 'dayjs'
@@ -966,7 +1035,7 @@ const goStepTwo = async () => {
   setRecentLogin()
   duringRelogin.value = false;
 
-  store.addImConnection(form).then((conn) => {
+  store.addImConnection(form as any).then((conn) => {
     if ((conn as any).testMode) {
       isTestMode.value = true
     } else {
@@ -1026,6 +1095,7 @@ const setEnable = async (i: DiceConnection, val: boolean) => {
 
 const askSetData = async (i: DiceConnection) => {
   form.protocol = i.adapter?.inPackGoCqHttpProtocol;
+  form.appVersion = i.adapter?.inPackGoCqHttpAppVersion;
   form.ignoreFriendRequest = i.adapter?.ignoreFriendRequest;
   form.useSignServer = i.adapter?.useSignServer;
   form.signServerConfig = i.adapter?.signServerConfig;
@@ -1036,20 +1106,22 @@ const askSetData = async (i: DiceConnection) => {
 }
 
 const doSetData = async () => {
-  let param = { 
-    protocol: form.protocol, 
+  let param = {
+    protocol: form.protocol,
     ignoreFriendRequest: form.ignoreFriendRequest,
   } as {
     protocol: number,
+    appVersion: string,
     ignoreFriendRequest: boolean,
     useSignServer?: boolean,
     signServerConfig?: any
   }
   if (form.protocol === 1 || form.protocol === 6) {
     param = {
-      ...param, 
-      useSignServer: form.useSignServer, 
-      signServerConfig: form.signServerConfig 
+      ...param,
+      appVersion: form.appVersion,
+      useSignServer: form.useSignServer,
+      signServerConfig: form.signServerConfig,
     }
   }
   const ret = await store.getImConnectionsSetData(form.endpoint, param);
@@ -1157,6 +1229,8 @@ const handleSignServerDelete = (url: string) => {
   }
 }
 
+const supportedQQVersions = ref<string[]>([])
+
 const form = reactive({
   accountType: 0,
   step: 1,
@@ -1164,6 +1238,7 @@ const form = reactive({
   account: '',
   password: '',
   protocol: 1,
+  appVersion: '',
   implementation:'',
   id: '',
   token: '',
@@ -1177,6 +1252,9 @@ const form = reactive({
   relWorkDir: '',
   accessToken: '',
   connectUrl: '',
+
+  host: '',
+  port: undefined,
 
   useSignServer: false,
   signServerConfig: {
@@ -1210,6 +1288,11 @@ onBeforeMount(async () => {
   await store.getImConnections()
   for (let i of store.curDice.conns || []) {
     delete store.curDice.qrcodes[i.id]
+  }
+
+  const versionsRes = await store.getSupportedQQVersions();
+  if (versionsRes.result) {
+    supportedQQVersions.value = ['', ...versionsRes.versions]
   }
 
   const lastIndex = {}
